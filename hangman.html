@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Hangman</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f7f6f2;
+    --surface: #ffffff;
+    --text: #1a1a18;
+    --muted: #8a897f;
+    --border: #e0dfd8;
+    --accent: #2a2a26;
+    --success: #2d6a4f;
+    --success-bg: #d8f3dc;
+    --danger: #9b2335;
+    --danger-bg: #fde8eb;
+    --key-used: #d4d3cc;
+    --key-correct: #2d6a4f;
+    --key-correct-bg: #d8f3dc;
+    --key-wrong-bg: #ebebeb;
+    --key-wrong-text: #b0afa8;
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem 4rem;
+  }
+
+  header {
+    width: 100%;
+    max-width: 560px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+  }
+
+  header h1 {
+    font-family: 'DM Mono', monospace;
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+  }
+
+  .stats {
+    display: flex;
+    gap: 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .stats span strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    width: 100%;
+    max-width: 560px;
+  }
+
+  /* Gallows SVG */
+  .gallows-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+  }
+
+  #gallows { display: block; }
+
+  .gallows-line { stroke: var(--border); stroke-width: 2; stroke-linecap: round; }
+  .body-part { stroke: var(--text); stroke-width: 2.5; stroke-linecap: round; fill: none; opacity: 0; transition: opacity 0.25s ease; }
+  .body-part.visible { opacity: 1; }
+
+  /* Word display */
+  .word-row {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+  }
+
+  .letter-box {
+    width: 30px;
+    text-align: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 22px;
+    font-weight: 500;
+    padding-bottom: 4px;
+    border-bottom: 2px solid var(--accent);
+    color: var(--text);
+    transition: color 0.2s;
+  }
+
+  .letter-box.space {
+    border-bottom-color: transparent;
+    width: 16px;
+  }
+
+  /* Hint */
+  .hint {
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+    min-height: 18px;
+  }
+
+  /* Divider */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1.5rem 0;
+  }
+
+  /* Wrong letters */
+  .wrong-row {
+    text-align: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    color: var(--danger);
+    letter-spacing: 3px;
+    min-height: 18px;
+    margin-bottom: 1rem;
+  }
+
+  /* Keyboard */
+  .keyboard {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 1.5rem;
+  }
+
+  .key {
+    width: 36px;
+    height: 38px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
+  }
+
+  .key:hover:not(:disabled) { background: var(--bg); transform: translateY(-1px); }
+  .key:active:not(:disabled) { transform: scale(0.95); }
+
+  .key.correct {
+    background: var(--key-correct-bg);
+    color: var(--key-correct);
+    border-color: #a7d7b8;
+  }
+
+  .key.wrong {
+    background: var(--key-wrong-bg);
+    color: var(--key-wrong-text);
+    border-color: var(--border);
+  }
+
+  .key:disabled { cursor: default; }
+
+  /* Status message */
+  .status {
+    text-align: center;
+    font-size: 15px;
+    font-weight: 500;
+    min-height: 22px;
+    transition: color 0.2s;
+  }
+
+  .status.win { color: var(--success); }
+  .status.lose { color: var(--danger); }
+
+  /* New game button */
+  .btn-new {
+    display: block;
+    margin: 1.25rem auto 0;
+    padding: 9px 24px;
+    border-radius: 8px;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: #fff;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+
+  .btn-new:hover { opacity: 0.85; }
+  .btn-new:active { transform: scale(0.97); }
+
+  /* Shake animation */
+  @keyframes shake {
+    0%,100%{transform:translateX(0)}
+    20%{transform:translateX(-5px)}
+    40%{transform:translateX(5px)}
+    60%{transform:translateX(-4px)}
+    80%{transform:translateX(4px)}
+  }
+  .shake { animation: shake 0.35s ease; }
+
+  /* Pop animation on correct guess */
+  @keyframes pop {
+    0%{transform:scale(1)}
+    50%{transform:scale(1.15)}
+    100%{transform:scale(1)}
+  }
+  .pop { animation: pop 0.2s ease; }
+
+  footer {
+    margin-top: 2rem;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>hangman_</h1>
+  <div class="stats">
+    <span>W <strong id="stat-wins">0</strong></span>
+    <span>L <strong id="stat-losses">0</strong></span>
+    <span>streak <strong id="stat-streak">0</strong></span>
+  </div>
+</header>
+
+<div class="card">
+
+  <div class="gallows-wrap">
+    <svg id="gallows" width="180" height="190" viewBox="0 0 180 190" xmlns="http://www.w3.org/2000/svg">
+      <!-- Static structure -->
+      <line class="gallows-line" x1="10" y1="185" x2="170" y2="185"/>
+      <line class="gallows-line" x1="50" y1="185" x2="50" y2="5"/>
+      <line class="gallows-line" x1="50" y1="5" x2="115" y2="5"/>
+      <line class="gallows-line" x1="115" y1="5" x2="115" y2="25"/>
+      <!-- Body parts -->
+      <circle id="p-head" class="body-part" cx="115" cy="40" r="15"/>
+      <line id="p-body" class="body-part" x1="115" y1="55" x2="115" y2="105"/>
+      <line id="p-larm" class="body-part" x1="115" y1="65" x2="90" y2="88"/>
+      <line id="p-rarm" class="body-part" x1="115" y1="65" x2="140" y2="88"/>
+      <line id="p-lleg" class="body-part" x1="115" y1="105" x2="90" y2="135"/>
+      <line id="p-rleg" class="body-part" x1="115" y1="105" x2="140" y2="135"/>
+    </svg>
+  </div>
+
+  <div class="word-row" id="word-display"></div>
+  <div class="hint" id="hint-text"></div>
+
+  <hr class="divider"/>
+
+  <div class="wrong-row" id="wrong-display"></div>
+  <div class="keyboard" id="keyboard"></div>
+
+  <div class="status" id="status-msg"></div>
+  <button class="btn-new" onclick="newGame()">new game</button>
+</div>
+
+<footer>press a key or click a letter</footer>
+
+<script>
+const PARTS = ['p-head','p-body','p-larm','p-rarm','p-lleg','p-rleg'];
+
+const WORDS = [
+  {word:'ELOQUENT',hint:'Fluent and persuasive in speaking'},
+  {word:'LABYRINTH',hint:'A complicated network of paths'},
+  {word:'PHANTOM',hint:'A ghost or illusion'},
+  {word:'SERENE',hint:'Calm and peaceful'},
+  {word:'CRYPTIC',hint:'Having a hidden meaning'},
+  {word:'ZENITH',hint:'The highest point reached'},
+  {word:'WHIMSICAL',hint:'Playfully quaint or fanciful'},
+  {word:'ECLIPSE',hint:'One object blocks another from view'},
+  {word:'FRENZY',hint:'A state of wild excitement'},
+  {word:'OBSCURE',hint:'Not well known or hard to find'},
+  {word:'PIVOT',hint:'Turn on a central point'},
+  {word:'RESILIENT',hint:'Able to recover quickly from difficulty'},
+  {word:'CATALYST',hint:'Something that speeds up a process'},
+  {word:'ENIGMA',hint:'A mysterious person or thing'},
+  {word:'VALOR',hint:'Great courage in the face of danger'},
+  {word:'TANGENT',hint:'Diverge from the main topic'},
+  {word:'SOLACE',hint:'Comfort in sorrow or distress'},
+  {word:'MOSAIC',hint:'A picture made from small colored pieces'},
+  {word:'CADENCE',hint:'A rhythmic sequence or flow'},
+  {word:'VENTURE',hint:'A risky or daring journey or undertaking'},
+  {word:'AMBIENT',hint:'Relating to the surrounding environment'},
+  {word:'BREVITY',hint:'Concise and exact use of words'},
+  {word:'CONJURE',hint:'Cause something to appear as if by magic'},
+  {word:'DUALITY',hint:'Being twofold or having two parts'},
+  {word:'FERVENT',hint:'Having or showing great passion'},
+];
+
+let current, hint, guessed, wrong, gameOver;
+let wins = 0, losses = 0, streak = 0;
+
+function newGame() {
+  const entry = WORDS[Math.floor(Math.random() * WORDS.length)];
+  current = entry.word;
+  hint = entry.hint;
+  guessed = new Set();
+  wrong = [];
+  gameOver = false;
+
+  PARTS.forEach(id => document.getElementById(id).classList.remove('visible'));
+  document.getElementById('status-msg').textContent = '';
+  document.getElementById('status-msg').className = 'status';
+  document.getElementById('wrong-display').textContent = '';
+  document.getElementById('hint-text').textContent = hint;
+
+  renderWord();
+  renderKeyboard();
+}
+
+function renderWord() {
+  const el = document.getElementById('word-display');
+  el.innerHTML = current.split('').map(l =>
+    `<span class="letter-box${l === ' ' ? ' space' : ''}">${guessed.has(l) || l === ' ' ? l : '\u00a0'}</span>`
+  ).join('');
+}
+
+function renderKeyboard() {
+  const kb = document.getElementById('keyboard');
+  kb.innerHTML = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(l => {
+    const isCorrect = guessed.has(l) && current.includes(l);
+    const isWrong = guessed.has(l) && !current.includes(l);
+    const cls = isCorrect ? 'correct' : isWrong ? 'wrong' : '';
+    return `<button class="key ${cls}" onclick="guess('${l}')" ${guessed.has(l) || gameOver ? 'disabled' : ''}>${l}</button>`;
+  }).join('');
+}
+
+function guess(letter) {
+  if (gameOver || guessed.has(letter)) return;
+  guessed.add(letter);
+
+  if (!current.includes(letter)) {
+    wrong.push(letter);
+    document.getElementById(PARTS[wrong.length - 1]).classList.add('visible');
+    document.getElementById('wrong-display').textContent = wrong.join('  ');
+
+    // shake the gallows on wrong
+    const gallows = document.getElementById('gallows');
+    gallows.classList.remove('shake');
+    void gallows.offsetWidth;
+    gallows.classList.add('shake');
+
+    if (wrong.length >= 6) { gameOver = true; endGame(false); }
+  } else {
+    // pop the word row on correct
+    const wr = document.getElementById('word-display');
+    wr.classList.remove('pop');
+    void wr.offsetWidth;
+    wr.classList.add('pop');
+  }
+
+  renderWord();
+  renderKeyboard();
+
+  if (!gameOver && current.split('').filter(l => l !== ' ').every(l => guessed.has(l))) {
+    gameOver = true;
+    endGame(true);
+  }
+}
+
+function endGame(won) {
+  const msg = document.getElementById('status-msg');
+  if (won) {
+    wins++; streak++;
+    msg.className = 'status win';
+    msg.textContent = 'nice one!';
+  } else {
+    losses++; streak = 0;
+    msg.className = 'status lose';
+    msg.textContent = `the word was ${current}`;
+    current.split('').forEach(l => guessed.add(l));
+    renderWord();
+  }
+  renderKeyboard();
+  document.getElementById('stat-wins').textContent = wins;
+  document.getElementById('stat-losses').textContent = losses;
+  document.getElementById('stat-streak').textContent = streak;
+}
+
+document.addEventListener('keydown', e => {
+  const l = e.key.toUpperCase();
+  if (l.length === 1 && l >= 'A' && l <= 'Z') guess(l);
+});
+
+newGame();
+</script>
+</body>
+</html>
